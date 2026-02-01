@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -23,17 +23,6 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-
-/**
- * Weather Portfolio App (single-file)
- * - No API key needed (Open-Meteo)
- * - City search with autocomplete (geocoding)
- * - Current, hourly chart, daily forecast
- * - Favorites, unit toggle, themes, polished UX
- *
- * Drop into: src/App.jsx (Vite + React)
- * Ensure Tailwind is set up in your project.
- */
 
 // ------------------------------
 // Utilities
@@ -103,10 +92,6 @@ function formatDayLabel(iso, locale = "pt-BR") {
   } catch {
     return "";
   }
-}
-
-function toTitleCase(s) {
-  return (s || "").replace(/\b\w+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
 }
 
 function wxEmoji(code, isDay) {
@@ -207,16 +192,39 @@ async function fetchJson(url) {
 // Open-Meteo endpoints
 async function geocode(query, count = 6, language = "pt") {
   const q = encodeURIComponent(query.trim());
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=${count}&language=${language}&format=json`;
+  const url = `/wx-geo/v1/search?name=${q}&count=${count}&language=${language}&format=json`;
   const data = await fetchJson(url);
   return (data?.results || []).map(normalizePlace);
 }
 
-async function reverseGeocode(lat, lon, count = 1, language = "pt") {
-  const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&count=${count}&language=${language}&format=json`;
+
+// Using another API for reversing
+async function reverseGeocodeOSM(lat, lon, language = "pt-BR") {
+  const url =
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=${language}`;
+
   const data = await fetchJson(url);
-  return (data?.results || []).map(normalizePlace);
+  const a = data?.address || {};
+
+  const name = a.city || a.town || a.village || a.county || "Minha localização";
+  const admin1 = a.state || "";
+  const country = a.country || "";
+
+  return [{
+    id: `osm:${lat},${lon}`,
+    name,
+    admin1,
+    country,
+    latitude: lat,
+    longitude: lon,
+    timezone: "auto",
+  }];
 }
+
+
+
+
+
 
 async function fetchForecast(place, unit = "metric") {
   const tempUnit = unit === "imperial" ? "fahrenheit" : "celsius";
@@ -296,7 +304,7 @@ function buildDailySeries(data, locale = "pt-BR") {
 
   return t.map((day, i) => ({
     day,
-    label: toTitleCase(formatDayLabel(day, locale)),
+    label: formatDayLabel(day, locale).replace(/^./, (c) => c.toLocaleUpperCase(locale)),
     max: max[i],
     min: min[i],
     code: code[i],
@@ -756,13 +764,12 @@ export default function App() {
   useEffect(() => {
     if (!place) return;
     loadForecast(place);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [place, unit]);
 
   // On first load, choose a default
   useEffect(() => {
     if (place) return;
-    // Default: São Paulo (portfolio-friendly)
+    // Default: São Paulo
     setPlace({
       id: "default-sp",
       name: "São Paulo",
@@ -786,16 +793,21 @@ export default function App() {
   async function locateMe() {
     setError(null);
     setLoading(true);
+
     try {
       const pos = await new Promise((resolve, reject) => {
         if (!navigator.geolocation) reject(new Error("Geolocation unavailable"));
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000 });
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+        });
       });
 
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
-      const places = await reverseGeocode(lat, lon, 1, "pt");
-      const picked = places[0] || {
+
+      // Sempre seta um place "básico" (sem reverse)
+      const fallbackPlace = {
         id: `gps:${lat},${lon}`,
         name: "Minha localização",
         admin1: "",
@@ -804,18 +816,27 @@ export default function App() {
         longitude: lon,
         timezone: "auto",
       };
-      setPlace(picked);
+      setPlace(fallbackPlace);
+      try {
+        const places = await reverseGeocodeOSM(lat, lon, "pt-BR");
+        if (places?.[0]) setPlace(places[0]);
+      } catch {
+        // ignora, fica com fallback
+      }
       setQuery("");
       setSuggestions([]);
-    } catch {
+
+    } catch (err) {
       setError({
         title: "Não consegui acessar sua localização",
         message: "Permita o acesso à localização no navegador ou busque sua cidade manualmente.",
+        raw: String(err?.message || err),
       });
     } finally {
       setLoading(false);
     }
   }
+
 
   const current = forecast?.current;
   const tempForBg = useMemo(() => {
@@ -827,6 +848,7 @@ export default function App() {
 
   const isDay = Boolean(current?.is_day);
   const gradient = bgGradientFromTemp(tempForBg, isDay, theme);
+  console.log(gradient);
 
   const hourlySeries = useMemo(
     () => (forecast ? buildHourlySeries(forecast, forecast?.current?.time, 24, locale) : []),
