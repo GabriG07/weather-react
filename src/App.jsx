@@ -154,11 +154,18 @@ function bgGradientFromTemp(tempC, isDay, theme) {
   const cool = t < 14;
   const hot = t > 28;
 
-  const base = theme === "dark" ? "from-zinc-950 via-zinc-950" : "from-white via-white";
-
-  if (!isDay) {
-    return `${base} to-indigo-950`;
+  console.log(`temp = ${t} hot? ${hot}`);
+  if (theme === "dark") {
+    // Dark theme
+    if (!isDay) return "from-zinc-950 via-zinc-950 to-indigo-950";
+    if (hot) return "from-zinc-950 to-amber-900";
+    if (cool) return "from-zinc-900 via-sky-900 to-sky-500";
+    return "from-zinc-900 via-zinc-950 to-gray-900";
   }
+
+  // Light theme
+  const base = "from-white via-white";
+  if (!isDay) return `${base} to-indigo-100`;
   if (hot) return `${base} to-amber-100`;
   if (cool) return `${base} to-sky-100`;
   return `${base} to-emerald-50`;
@@ -816,12 +823,13 @@ export default function App() {
         longitude: lon,
         timezone: "auto",
       };
-      setPlace(fallbackPlace);
+
       try {
         const places = await reverseGeocodeOSM(lat, lon, "pt-BR");
         if (places?.[0]) setPlace(places[0]);
       } catch {
-        // ignora, fica com fallback
+        // fica com fallback
+        setPlace(fallbackPlace);
       }
       setQuery("");
       setSuggestions([]);
