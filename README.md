@@ -1,7 +1,7 @@
 # Previsão do Tempo (React)
 
 Aplicação web de previsão do tempo com busca de cidades, geolocalização, favoritos e gráficos, consumindo a API do Open-Meteo.
-
+ 
 ---
 
 ## Funcionalidades
