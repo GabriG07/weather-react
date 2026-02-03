@@ -197,7 +197,7 @@ async function fetchJson(url) {
 // Open-Meteo endpoints
 async function geocode(query, count = 6, language = "pt") {
   const q = encodeURIComponent(query.trim());
-  const url = `/wx-geo/v1/search?name=${q}&count=${count}&language=${language}&format=json`;
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=${count}&language=${language}&format=json`;
   const data = await fetchJson(url);
   return (data?.results || []).map(normalizePlace);
 }
