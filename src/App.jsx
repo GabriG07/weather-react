@@ -24,18 +24,17 @@ import {
   CartesianGrid,
 } from "recharts";
 
-// ------------------------------
-// Utilities
-// ------------------------------
 
+//Chaves para persistência no localstorage, com versionamento para o caso de mudanças no formato no futuro
 const STORAGE_KEYS = {
   favorites: "wx_favorites_v1",
   lastPlace: "wx_last_place_v1",
   settings: "wx_settings_v1",
 };
 
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n)); //garente que um numero (n) fique dentro do intervalo [a, b]
 
+//Faz o parse do json, retornando o fallback em caso de erro
 function safeJsonParse(value, fallback) {
   try {
     return JSON.parse(value);
@@ -95,7 +94,6 @@ function formatDayLabel(iso, locale = "pt-BR") {
 }
 
 function wxEmoji(code, isDay) {
-  // Simple mapping based on Open-Meteo weather codes
   // https://open-meteo.com/en/docs
   if (code == null) return "❔";
   if (code === 0) return isDay ? "☀️" : "🌙";
@@ -149,21 +147,19 @@ function wxLabelPT(code) {
 }
 
 function bgGradientFromTemp(tempC, isDay, theme) {
-  // Pick a soft background gradient based on temperature
   const t = clamp(tempC ?? 20, -5, 40);
   const cool = t < 14;
   const hot = t > 28;
 
-  console.log(`temp = ${t} hot? ${hot}`);
   if (theme === "dark") {
-    // Dark theme
+    //Dark theme
     if (!isDay) return "from-zinc-950 via-zinc-950 to-indigo-950";
     if (hot) return "from-zinc-950 to-amber-900";
     if (cool) return "from-zinc-900 via-sky-900 to-sky-500";
     return "from-zinc-900 via-zinc-950 to-gray-900";
   }
 
-  // Light theme
+  //Light theme
   const base = "from-white via-white";
   if (!isDay) return `${base} to-indigo-100`;
   if (hot) return `${base} to-amber-100`;
@@ -171,6 +167,8 @@ function bgGradientFromTemp(tempC, isDay, theme) {
   return `${base} to-emerald-50`;
 }
 
+//Normaliza um resultado de geocoding para um formato consistente
+//Ajuda a não depender do shape exato retornado pela API
 function normalizePlace(p) {
   if (!p) return null;
   return {
@@ -205,7 +203,7 @@ async function geocode(query, count = 6, language = "pt") {
 }
 
 
-// Using another API for reversing
+// Reverse geocode via Nominatim
 async function reverseGeocodeOSM(lat, lon, language = "pt-BR") {
   const url =
     `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=${language}`;
@@ -228,11 +226,7 @@ async function reverseGeocodeOSM(lat, lon, language = "pt-BR") {
   }];
 }
 
-
-
-
-
-
+//Busca previsao no Open-Meteo
 async function fetchForecast(place, unit = "metric") {
   const tempUnit = unit === "imperial" ? "fahrenheit" : "celsius";
   const windUnit = unit === "imperial" ? "mph" : "kmh";
@@ -243,7 +237,6 @@ async function fetchForecast(place, unit = "metric") {
     timezone: place.timezone || "auto",
     temperature_unit: tempUnit,
     wind_speed_unit: windUnit,
-    // current
     current: [
       "temperature_2m",
       "relative_humidity_2m",
@@ -253,7 +246,6 @@ async function fetchForecast(place, unit = "metric") {
       "visibility",
       "is_day",
     ].join(","),
-    // hourly
     hourly: [
       "temperature_2m",
       "apparent_temperature",
@@ -263,7 +255,6 @@ async function fetchForecast(place, unit = "metric") {
       "visibility",
       "precipitation_probability",
     ].join(","),
-    // daily
     daily: ["weather_code", "temperature_2m_max", "temperature_2m_min", "sunrise", "sunset"].join(","),
     forecast_days: "7",
   });
@@ -272,6 +263,7 @@ async function fetchForecast(place, unit = "metric") {
   return fetchJson(url);
 }
 
+//Monta a série horária a partir do momento atual
 function buildHourlySeries(data, nowISO, hours = 24, locale = "pt-BR") {
   const times = data?.hourly?.time || [];
   const temps = data?.hourly?.temperature_2m || [];
@@ -301,6 +293,7 @@ function buildHourlySeries(data, nowISO, hours = 24, locale = "pt-BR") {
   return out;
 }
 
+//Monta série diária com labels (Seg, Ter, ...).
 function buildDailySeries(data, locale = "pt-BR") {
   const t = data?.daily?.time || [];
   const max = data?.daily?.temperature_2m_max || [];
@@ -326,10 +319,6 @@ function isSamePlace(a, b) {
   const keyB = `${b.latitude.toFixed(4)}:${b.longitude.toFixed(4)}`;
   return keyA === keyB;
 }
-
-// ------------------------------
-// UI Components
-// ------------------------------
 
 function Pill({ icon: Icon, label, value }) {
   return (
@@ -682,10 +671,8 @@ function Footer() {
   );
 }
 
-// ------------------------------
-// Main App
-// ------------------------------
 
+// -------------App -------------
 export default function App() {
   const locale = "pt-BR";
 
@@ -706,7 +693,7 @@ export default function App() {
 
   const isFavorite = useMemo(() => favorites.some((f) => isSamePlace(f, place)), [favorites, place]);
 
-  // Apply theme to html root
+  // Aplica tema ao html root
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") root.classList.add("dark");
@@ -714,7 +701,7 @@ export default function App() {
     saveLS(STORAGE_KEYS.settings, settings);
   }, [settings, theme]);
 
-  // Persist favorites/place
+  // PersistÊncia das localidades favoritas
   useEffect(() => saveLS(STORAGE_KEYS.favorites, favorites), [favorites]);
   useEffect(() => saveLS(STORAGE_KEYS.lastPlace, place), [place]);
 
@@ -767,13 +754,13 @@ export default function App() {
     }
   }
 
-  // Load forecast when place/unit changes
+  // Recarrega a previsão quando local ou unidade muda 
   useEffect(() => {
     if (!place) return;
     loadForecast(place);
   }, [place, unit]);
 
-  // On first load, choose a default
+  // Primeiro carregamento: se não tem nenhum lugar ainda, vai no default
   useEffect(() => {
     if (place) return;
     // Default: São Paulo
@@ -848,7 +835,7 @@ export default function App() {
 
   const current = forecast?.current;
   const tempForBg = useMemo(() => {
-    // If imperial, convert to a pseudo-C scale for background decisions
+    //Se estiver em imperial, faz uma conversão para Cº apenas para decidir o gradiente do bg
     const t = current?.temperature_2m;
     if (t == null) return 20;
     return unit === "imperial" ? (t - 32) * (5 / 9) : t;
@@ -856,7 +843,6 @@ export default function App() {
 
   const isDay = Boolean(current?.is_day);
   const gradient = bgGradientFromTemp(tempForBg, isDay, theme);
-  console.log(gradient);
 
   const hourlySeries = useMemo(
     () => (forecast ? buildHourlySeries(forecast, forecast?.current?.time, 24, locale) : []),
